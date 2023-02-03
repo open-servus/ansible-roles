@@ -1,0 +1,9 @@
+#!/bin/bash
+if ! pgrep -c nginx 1>/dev/null 2>/dev/null; then
+  if ! pgrep -c rsync 1>/dev/null 2>/dev/null; then
+    rsync --delete --owner --group --exclude '/shared' -lave "ssh -i /root/.ssh/sync_files" root@{{ admin_private_ip }}:{{ magento_dir }}/ {{ magento_dir }}/
+    /etc/init.d/nginx restart
+  fi
+else
+  echo "nginx already running, do nothing";
+fi

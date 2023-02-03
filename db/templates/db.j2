@@ -1,0 +1,5 @@
+#create database {{ project_admin_name }};
+CREATE USER IF NOT EXISTS '{{ project_admin_name }}'@'%' IDENTIFIED BY '{{ db_user_pass }}';
+GRANT ALL PRIVILEGES ON `{{ project_admin_name }}`.* TO '{{ project_admin_name }}'@'%';
+
+FLUSH PRIVILEGES;

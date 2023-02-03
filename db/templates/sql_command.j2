@@ -1,0 +1,2 @@
+#!/bin/bash
+mysql -h'{{ project_db_endpoint }}' -umaster -p'{{ aws_rds_master_pass }}' {{ project_admin_name }} < db.sql

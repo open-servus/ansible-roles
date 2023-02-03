@@ -1,0 +1,86 @@
+---
+- hostname:
+    name: "{{ project_elasticsearch_name }}"
+  when: project_plan != "small"
+
+- name: Edit hosts file
+  lineinfile:
+    path: /etc/hosts
+    state: present
+    insertafter: EOF
+    line: "{{ elasticsearch_private_ip }} {{ project_elasticsearch_name }}"
+
+- name: Installing Packages
+  apt:
+    name: "{{ packages }}"
+    state: "present"
+    force_apt_get: yes
+  vars:
+    packages:
+      - 'apt-transport-https'
+      - 'gnupg2'
+
+- name: Add ES Apt signing key, uses whichever key is at the URL
+  apt_key:
+    url: https://artifacts.elastic.co/GPG-KEY-elasticsearch
+    state: present
+
+- apt_repository:
+    repo: deb https://artifacts.elastic.co/packages/7.x/apt stable main
+    state: present
+    filename: elastic-7.x
+
+- name: Update apt packages list
+  apt:
+    update_cache: yes
+
+- name: Installing ES Server Packages
+  apt:
+    name: "{{ packages }}"
+    state: "present"
+    force_apt_get: yes
+  vars:
+    packages:
+      - 'elasticsearch'
+
+- name: Check ES dir destination
+  stat:
+    path: /home/elasticsearch
+  register: p
+
+- name: Move ES path directory
+  command: mv "/var/lib/elasticsearch" "/home/"
+  when: p.stat.exists == False
+
+- name: Create elasticsearch symbolic link
+  file:
+    src: "/home/elasticsearch"
+    dest: "/var/lib/elasticsearch"
+    state: link
+
+- name: Update path.data parameter
+  replace:
+    path: "/etc/elasticsearch/elasticsearch.yml"
+    regexp: "path.data: /var/lib/elasticsearch"
+    replace: "path.data: /home/elasticsearch"
+
+- name: Open for private IP access
+  replace:
+    path: "/etc/elasticsearch/elasticsearch.yml"
+    regexp: "#http.port: 9200"
+    replace: "http.port: 9200"
+
+
+- name: Open for private IP access
+  lineinfile:
+    path: "/etc/elasticsearch/elasticsearch.yml"
+    state: present
+    insertafter: EOF
+    line: "http.host: 0.0.0.0"
+
+
+- name: Start Elasticsearch Service
+  service:
+    name: elasticsearch
+    state: started
+    enabled: true

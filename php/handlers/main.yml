@@ -1,0 +1,10 @@
+---
+- name: Restart PHP-FPM Service
+  service:
+    name: "php{{ php_version }}-fpm"
+    state: restarted
+
+- name: Reload PHP-FPM Configuration
+  service:
+    name: "php{{ php_version }}-fpm"
+    state: reloaded

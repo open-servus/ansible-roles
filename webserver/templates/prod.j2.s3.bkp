@@ -1,0 +1,352 @@
+map $http_user_agent $bad_bot {
+  default 0;
+   ~(?i)(Ahrefsbot|Baiduspider|YandexBot|Abonti|ShopWiki|FatBot|UnisterBot|Baidu|BLEXBot|Twengabot|httrack|WinHTTrack|htmlparser|urllib|Zeus|scan|email|WebCollector|WebCopier|WebCopy|webcraw|LWP::simple|Havij) 1;
+}
+
+map $http_host $MAGE_RUN_CODE_PROD {
+    default '';
+    fr.domain.com view_ca_fr;
+    de.domain.com view_ch_fr;
+}
+
+map $uri   $authentication_uri {
+   default "Access Restricted";
+    ~/media/*    off;
+    ~/images/*  off;
+  ~^/rest off;
+}
+
+map $http_host $authentication_host {
+    default $authentication_uri;
+    test.domain.com  on;
+    # List of paths to bypass
+}
+
+
+map $remote_addr $authentication_addr {
+    default $authentication_host;
+    52.33.33.124 off;
+    #185.235.84.0/22 off;
+}
+
+map $http_user_agent $authentication {
+    default $authentication_addr;
+    "Amazon CloudFront" "off";
+    "~*googlebot" "off";
+}
+
+
+server {
+  listen 80 default_server;
+  server_name _;
+  root {{ magento_dir }}/current/pub;
+  location ~ /.well-known {
+    auth_basic off;
+    allow all;
+  }
+  location / {
+    return 301 https://$host$request_uri;
+  }
+}
+
+server {
+    listen 8080 default_server;
+    ##in the event of no matches, nginx will select this 8080 block
+    server_name _;
+    #server_name domain.com;
+    client_max_body_size 50m;
+    root {{ magento_dir }}/current/pub;
+
+    access_log {{ nginx_log_dir }}/access.log;
+    error_log {{ nginx_log_dir }}/error.log;
+
+    if ($bad_bot = 1) {
+      return 403;
+    }
+
+    location /healthcheck {
+      return 200;
+    }
+
+    #rewrite ^/blog$ /blog/$1 permanent;
+
+    #location /blog/ {
+    #  try_files $uri $uri/ /blog/index.php?$args;
+    #}
+
+    location ~/media/ {
+      add_header Access-Control-Allow-Origin "*";
+      expires max;
+      try_files $uri $uri/ /get.php$is_args$args;
+    }
+
+    location /static/ {
+      add_header Access-Control-Allow-Origin "*";
+      location ~ ^/static/version {
+        rewrite ^/static/(version\d*/)?(.*)$ /static/$2 last;
+      }
+      location ~* \.(ico|jpg|jpeg|png|gif|svg|js|css|swf|eot|ttf|otf|woff|woff2|html|json)$ {
+        add_header Access-Control-Allow-Origin "*";
+        expires max;
+        access_log off;
+        if (!-f $request_filename) {
+            rewrite ^/static/(version\d*/)?(.*)$ /static.php?resource=$2 last;
+            rewrite ^/static/(.*)$ /static.php?resource=$1 last;
+        }
+      }
+    }
+
+    try_files $uri $uri/ /index.php?$args;
+    index home.php index.php index.html index.htm;
+
+    location ~ \.php$ {
+       include fastcgi_params;
+       fastcgi_intercept_errors on;
+       fastcgi_index index.php;
+       fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+       try_files $uri =404;
+       fastcgi_pass 127.0.0.1:9741;
+       fastcgi_read_timeout 3600;
+       fastcgi_send_timeout 3600;
+       fastcgi_param HTTPS "on";
+       #fastcgi_param HTTPS $fastcgi_https;
+       fastcgi_param SERVER_PORT 80;
+       fastcgi_param PHP_VALUE "
+         error_log={{ php_log_dir }}/error.log;
+         memory_limit=768M;
+         max_execution_time=360;";
+       fastcgi_param MAGE_RUN_CODE $MAGE_RUN_CODE_PROD;
+       #fastcgi_param MAGE_RUN_CODE "store_code";
+       #fastcgi_param MAGE_RUN_TYPE "website";
+    }
+
+    gzip                on;
+    gzip_disable        "msie6";
+    gzip_vary           on;
+    gzip_proxied        any;
+    gzip_comp_level     9;
+    gzip_buffers        16 8k;
+    gzip_http_version   1.1;
+    gzip_types text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript image/png image/gif image/jpeg application/javascript image/svg+xml;
+
+    location ~* ^.+\.(css|js|jpg|jpeg|gif|png|ico|gz|svg|svgz|ttf|otf|woff|woff2|eot|mp4|ogg|ogv|webm|zip|swf|json)$ {
+      add_header Access-Control-Allow-Origin "*";
+      expires max;
+      access_log off;
+    }
+
+    if (-f $request_filename) {
+      break;
+    }
+
+    location ~/admin/ {
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $remote_addr;
+       proxy_set_header X-Forwarded-Host $http_host;
+       proxy_set_header Host $host;
+       proxy_set_header HTTPS $fastcgi_https;
+       proxy_pass http://127.0.0.1:88;
+       proxy_hide_header Via;
+       proxy_hide_header Vary;
+       proxy_hide_header X-Server;
+       #proxy_hide_header X-Backend-Server;
+       proxy_max_temp_file_size 0;
+       proxy_connect_timeout      7200;
+       proxy_send_timeout         7200;
+       proxy_read_timeout         7200;
+       proxy_buffer_size          128k;
+       proxy_buffers              4 256k;
+       proxy_busy_buffers_size    256k;
+       proxy_temp_file_write_size 256k;
+    }
+}
+
+server {
+  listen 443 ssl http2 default_server;
+  ssl_certificate /etc/nginx/ssl/self-ca-cert.pem;
+  ssl_certificate_key /etc/nginx/ssl/self-ca-key.pem;
+  ssl_session_cache  builtin:1000  shared:SSL:10m;
+  ssl_session_timeout  10m;
+  ssl_protocols TLSv1.1 TLSv1.2;
+  ssl_ciphers 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128:AES256:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK';
+  ssl_prefer_server_ciphers on;
+  ssl_stapling on;
+  ssl_stapling_verify on;
+  ##in the event of no matches, nginx will select this 443 block
+  server_name {{ project_domain_name }};
+  #server_name domain.com;
+
+  client_max_body_size 50m;
+  root {{ magento_dir }}/current/pub;
+
+  access_log {{ nginx_log_dir }}/access.log;
+  error_log {{ nginx_log_dir }}/error.log;
+
+  if ($bad_bot = 1) {
+    return 403;
+  }
+
+  location ^~ /.well-known/apple-developer-merchantid-domain-association {
+    allow all;
+    auth_basic off;
+    add_header Content-Type text/plain;
+  }
+
+  location /healthcheck {
+    return 200;
+  }
+
+  gzip                on;
+  gzip_disable        "msie6";
+  gzip_vary           on;
+  gzip_proxied        any;
+  gzip_comp_level     9;
+  gzip_buffers        16 8k;
+  gzip_http_version   1.1;
+  gzip_types          text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript image/png image/gif image/jpeg application/javascript image/svg+xml;
+
+  location ~ (/(app/|includes/|pkginfo/|var/|report/config.xml)|/\.(?!thumbs.+).+) {
+    deny all;
+  }
+
+  location /media/ {
+    resolver 8.8.8.8;
+    set $bucket "{{ project_s3_bucket }}";
+    proxy_pass https://s3.amazonaws.com/$bucket$uri;
+    proxy_pass_request_body off;
+    proxy_pass_request_headers off;
+    proxy_intercept_errors on;
+    proxy_hide_header "x-amz-id-2";
+    proxy_hide_header "x-amz-request-id";
+    proxy_hide_header "x-amz-storage-class";
+    proxy_hide_header "Set-Cookie";
+    proxy_ignore_headers "Set-Cookie";
+  }
+
+  location ~/admin/ {
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header Host $host;
+    proxy_set_header HTTPS "off";
+    proxy_pass http://127.0.0.1:88;
+    proxy_hide_header Via;
+    proxy_hide_header Vary;
+    proxy_hide_header X-Server;
+    #proxy_hide_header X-Backend-Server;
+    proxy_max_temp_file_size 0;
+    proxy_connect_timeout      7200;
+    proxy_send_timeout         7200;
+    proxy_read_timeout         7200;
+    proxy_buffer_size          128k;
+    proxy_buffers              4 256k;
+    proxy_busy_buffers_size    256k;
+    proxy_temp_file_write_size 256k;
+  }
+
+  location / {
+    #auth_basic  $authentication_uri;
+    #auth_basic_user_file /home/cloudpanel/.data/basic_auth/test_environment;
+    location ~ ^/static/version {
+      rewrite ^/static/(version\d*/)?(.*)$ /static/$2 last;
+    }
+    location ~* \.(ico|jpg|jpeg|png|gif|svg|js|css|swf|eot|ttf|otf|woff|woff2|html|json)$ {
+      add_header Access-Control-Allow-Origin "*";
+      add_header 'Access-Control-Allow-Headers' 'x-requested-with' 'always';
+      if ($request_method = 'OPTIONS') {
+          return 204;
+       }
+      expires max;
+      access_log off;
+      if (!-f $request_filename) {
+         proxy_pass http://127.0.0.1:6081;
+         #proxy_pass http://127.0.0.1:8080;
+      }
+    }
+    proxy_pass http://127.0.0.1:6081;
+    #proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Host $http_host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #proxy_hide_header X-Varnish;
+    proxy_hide_header Via;
+    proxy_hide_header Vary;
+    proxy_hide_header X-Server;
+    proxy_hide_header X-Backend-Server;
+    proxy_hide_header X-Frame-Options;
+    proxy_redirect off;
+    proxy_max_temp_file_size 0;
+    proxy_connect_timeout      720;
+    proxy_send_timeout         720;
+    proxy_read_timeout         720;
+    proxy_buffer_size          128k;
+    proxy_buffers              4 256k;
+    proxy_busy_buffers_size    256k;
+    proxy_temp_file_write_size 256k;
+  }
+}
+
+server {
+  listen 88;
+  server_name _;
+  client_max_body_size 50m;
+  root {{ magento_dir }}/current/pub;
+
+  access_log {{ nginx_log_dir }}/access.log;
+  error_log {{ nginx_log_dir }}/error.log;
+
+  gzip                on;
+  gzip_disable        "msie6";
+  gzip_vary           on;
+  gzip_proxied        any;
+  gzip_comp_level     8;
+  gzip_buffers        16 8k;
+  gzip_http_version   1.1;
+  gzip_types          text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript image/png image/gif image/jpeg application/javascript image/svg+xml;
+
+  location ~ (/(app/|includes/|pkginfo/|var/|report/config.xml)|/\.(?!thumbs.+).+) {
+    deny all;
+  }
+
+  location /static/ {
+      location ~ ^/static/version {
+         rewrite ^/static/(version\d*/)?(.*)$ /static/$2 last;
+      }
+      location ~* \.(ico|jpg|jpeg|png|gif|svg|js|css|swf|eot|ttf|otf|woff|woff2|html|json)$ {
+        add_header Access-Control-Allow-Origin "*";
+        add_header 'Access-Control-Allow-Headers' 'x-requested-with' 'always';
+        if ($request_method = 'OPTIONS') {
+           return 204;
+        }
+        expires max;
+        access_log off;
+        if (!-f $request_filename) {
+            rewrite ^/static/(version\d*/)?(.*)$ /static.php?resource=$2 last;
+            rewrite ^/static/(.*)$ /static.php?resource=$1 last;
+        }
+      }
+  }
+
+  try_files $uri $uri/ /index.php?$args;
+  index index.php index.html index.htm;
+
+  location ~ \.php$ {
+    include fastcgi_params;
+    fastcgi_intercept_errors on;
+    fastcgi_index index.php;
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    try_files $uri =404;
+    fastcgi_pass 127.0.0.1:9741;
+    fastcgi_read_timeout 36000;
+    fastcgi_send_timeout 36000;
+    fastcgi_param HTTPS "on";
+    #fastcgi_param HTTPS $fastcgi_https;
+    fastcgi_param SERVER_PORT 80;
+    fastcgi_param PHP_VALUE "
+      error_log={{ php_log_dir }}/error.log;
+      memory_limit=4092M;
+      max_execution_time=7200;";
+    #fastcgi_param MAGE_MODE "production";
+   }
+}
