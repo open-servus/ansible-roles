@@ -1,0 +1,7 @@
+#!/bin/bash
+DATA_NFS=$(timeout 3 df -T | grep nfs)
+
+if [[ ! $DATA_NFS ]]; then
+   umount -f /data
+   timeout 5 mount -a
+fi

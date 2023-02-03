@@ -1,0 +1,30 @@
+---
+- name: Installing snapd Package
+  apt:
+    name: "{{ packages }}"
+    state: "present"
+    force_apt_get: yes
+  vars:
+    packages:
+      - 'snapd'
+
+- name: Install Snap Core
+  shell: snap install core
+
+- name:  Refresh Snap Core
+  shell: snap refresh core
+
+- name:  Install Certbot
+  shell: snap install --classic certbot
+
+- name: Create certbot symbolic link
+  file:
+    src: "/snap/bin/certbot"
+    dest: "/usr/bin/certbot"
+    state: link
+
+
+- name:  Setup Certificate Certbot
+  shell: certbot -d {{ project_domain_name }} --nginx -n --agree-tos --email taulanthalili@hotmail.com
+
+ 

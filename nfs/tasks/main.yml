@@ -1,0 +1,65 @@
+- name: Set host name
+  hostname:
+    name: "{{ project_nfs_name }}"
+
+- name: Update apt packages list
+  apt:
+    update_cache: yes
+
+- name: Installing NFS Server Packages
+  apt:
+    name: "{{ packages }}"
+    state: "present"
+    force_apt_get: yes
+  vars:
+    packages:
+      - 'nfs-kernel-server'
+      - 'nfs-common'
+      - 'rpcbind'
+
+- name: Create a user
+  user:
+    name: "{{ magento_user }}" #WILL BE USED FROM VARIABLES
+    group: www-data
+    shell: /bin/false       # Defaults to /bin/bash
+    #uid: 1001 #Should be the same as Admin
+    create_home: False
+    home: "{{ magento_dir }}"  # Defaults to /home/<username>
+
+- name: Creates directory
+  file:
+    path: "{{ magento_dir }}"
+    state: directory
+    mode: 0775
+    group: www-data
+    owner: "{{ magento_user }}"
+
+- name: Edit hosts file
+  lineinfile:
+    path: /etc/hosts
+    state: present
+    insertafter: EOF
+    line: "{{ nfs_private_ip }} {{ project_nfs_name }}"
+
+- name: configure export
+  copy:
+    content: "{{ magento_dir }} *(rw,fsid=0,no_subtree_check,async,no_root_squash)"
+    dest:  /etc/exports
+
+- name: Run command exportfs -a
+  command: exportfs -a
+
+- name: Restart NFS Common
+  command: /etc/init.d/nfs-common restart
+
+- name: Restart NFS Kernel
+  command: /etc/init.d/nfs-kernel-server restart
+
+- name: Enable and start rpc-startd
+  command: systemctl enable rpc-statd
+
+- name: Start rpc-startd
+  command: systemctl start rpc-statd
+
+- name: Systemctl daemon reload
+  command: systemctl daemon-reload

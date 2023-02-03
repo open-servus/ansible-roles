@@ -1,0 +1,38 @@
+---
+#apt install -y php7.4 php7.4-fpm php7.4-common php7.4-json php7.4-gmp php7.4-curl
+#php7.4-soap php7.4-bcmath php7.4-intl php7.4-mbstring php7.4-xmlrpc
+#php7.4-mysql php7.4-gd php7.4-xml php7.4-cli php7.4-zip php7.4-opcache php7.4-xsl
+
+- name: Install PHP {{ php_version }} and Magento PHP Dependencies
+  apt:
+    name: [
+     "php{{ php_version }}",
+     "php{{ php_version }}-fpm",
+     "php{{ php_version }}-json",
+     "php{{ php_version }}-opcache",
+     "php{{ php_version }}-xml",
+     "php{{ php_version }}-bcmath",
+     "php{{ php_version }}-curl",
+     "php{{ php_version }}-dom",
+     "php{{ php_version }}-gd",
+     "php{{ php_version }}-iconv",
+     "php{{ php_version }}-intl",
+     "php{{ php_version }}-mbstring",
+     "php{{ php_version }}-mysql",
+     "php{{ php_version }}-simplexml",
+     "php{{ php_version }}-soap",
+     "php{{ php_version }}-xsl",
+     "php{{ php_version }}-zip"
+    ]
+    state: latest
+
+
+- name: Add PHP-FPM Configuration File
+  template:
+    src: php-fpm.j2
+    dest: "/etc/php/{{ php_version }}/fpm/pool.d/www.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+  - Restart PHP-FPM Service

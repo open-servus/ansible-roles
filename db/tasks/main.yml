@@ -1,0 +1,27 @@
+---
+- name: Add SQL File
+  template:
+    src: db.j2
+    dest: /home/admin/db.sql
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+- name: Add SQL Command File
+  template:
+    src: sql_command.j2
+    dest: /home/admin/sql_command.sh
+    owner: root
+    group: root
+    mode: '0774'
+    backup: yes
+
+- name: Replace master with root
+  replace:
+    path: "/home/admin/sql_command.sh"
+    regexp: "umaster"
+    replace: "uroot"
+  when: project_plan == "small"
+
+- name: Run SQL Command
+  command: /home/admin/sql_command.sh

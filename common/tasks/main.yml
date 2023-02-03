@@ -1,0 +1,174 @@
+---
+- name: Set host name
+  hostname:
+    name: "{{ project_admin_name }}"
+
+- name: Installing Packages
+  apt:
+    name: "{{ packages }}"
+    state: "present"
+    force_apt_get: yes
+  vars:
+    packages:
+      - 'redis-server'
+      - 'varnish'
+      - 'openssl'
+      - 'mariadb-client'
+      - 'curl'
+      - 'gnupg2'
+      - 'nfs-common'
+      - 'rsync'
+#      - 'wkhtmltopdf'
+#      - 'imagemagick'
+#      - 'git'
+#      - 'jq'
+
+
+- name: Create a user
+  user:
+    name: "{{ magento_user }}" #WILL BE USED FROM VARIABLES
+    password: "{{ db_user_pass | password_hash('sha512') }}"
+    group: www-data
+    shell: /bin/bash       # Defaults to /bin/bash
+    home:  "{{ magento_dir }}"  # Defaults to /home/<username>
+
+- name: Creates directory
+  file:
+    path: "{{ magento_dir }}/current"
+    state: directory
+    mode: 0775
+    group: www-data
+    owner: "{{ magento_user }}"
+
+- name: create directory struct
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0775
+    group: www-data
+    owner: "{{ magento_user }}"
+  loop:
+    - "{{ magento_dir }}/shared/pub"
+    - "{{ magento_dir }}/shared/scripts"
+    - "{{ magento_dir }}/releases/release1"
+
+- name: Add check_admin bash script
+  template:
+    src: check_admin.j2
+    dest: "{{ magento_dir }}/shared/scripts/check_admin.sh"
+    owner: "{{ magento_user }}"
+    group: www-data
+    mode: '0774'
+    backup: yes
+
+- name: Add check_admin bash script
+  template:
+    src: check_admin.j2
+    dest: "/root/check_admin.sh"
+    owner: root
+    group: root
+    mode: '0774'
+    backup: yes
+
+- name: Edit hosts file
+  lineinfile:
+    path: /etc/hosts
+    state: present
+    insertafter: EOF
+    line: "127.0.0.1 {{ project_admin_name }}"
+
+- name: Edit hosts file
+  lineinfile:
+    path: /etc/hosts
+    state: present
+    insertafter: EOF
+    line: "{{ nfs_private_ip }} {{ project_nfs_name }}"
+
+- name: Creates directory
+  file:
+    path: /data
+    state: directory
+    mode: 0775
+    group: www-data
+
+- name: Mount up NFS
+  mount:
+    path: /data
+    src: "{{ project_nfs_name }}:/"
+    fstype: nfs
+    opts: rw
+    state: mounted
+
+#dir struct
+- name: create directory struct
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0775
+    group: www-data
+    owner: "{{ magento_user }}"
+  loop:
+    - /data/prod/pub/static/_cache
+    - /data/prod/pub/media
+
+- name: Create _cache symbolic link
+  ansible.builtin.file:
+    src: /data/prod/pub/static/_cache
+    dest: "{{ magento_dir }}/shared/pub/static/_cache"
+    group: www-data
+    owner: "{{ magento_user }}"
+    state: link
+
+- name: Create media symbolic link
+  ansible.builtin.file:
+    src: /data/prod/pub/media
+    dest: "{{ magento_dir }}/shared/pub/media"
+    group: www-data
+    owner: "{{ magento_user }}"
+    state: link
+
+- name: Copy file and set up the permission and owner of the file
+  template:
+    src: app_sync_files.j2
+    dest: "/root/app_sync_files.sh"
+    mode: '700'
+
+- name: Copy file and set up the permission and owner of the file
+  template:
+    src: check_data_nfs.j2
+    dest: "/root/check_data_nfs.sh"
+    mode: '700'
+
+- name: Copy file and set up the permission and owner of the file
+  template:
+    src: app_sync_files_admin.j2
+    dest: "/home/admin/app_sync_files_admin.sh"
+    mode: '700'
+
+- name: Create ssh keypair
+  openssh_keypair:
+    path: /root/.ssh/sync_files
+    size: 2048
+
+- name: Slurp sync_files file
+  slurp:
+    src: /root/.ssh/sync_files.pub
+  register: sync_files_pub
+
+- name: Set authorized key
+  authorized_key:
+    user: root
+    key: "{{ sync_files_pub['content'] | b64decode }}"
+    state: present
+
+- name: Ensure NFS check job that runs every minute
+  cron:
+    name: "check nfs"
+    minute: "*/1"
+    job: "/root/check_data_nfs.sh &> /dev/null"
+
+- name: Ensure synch files job that runs at startup
+  cron:
+    name: "Synch files"
+    special_time: reboot
+    job: "! /root/check_admin.sh && /etc/init.d/nginx stop && /root/app_sync_files.sh &> /dev/null"

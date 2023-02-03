@@ -1,0 +1,91 @@
+---
+- name: Set Magento Access Keys for Composer
+  command: su - {{ magento_user }} -c "composer global config http-basic.repo.magento.com "{{ magento_public_key }}" "{{ magento_private_key }}""
+
+- name: Delete current content & directory if exists
+  file:
+    state: absent
+    path: "{{ magento_dir }}/current"
+
+- name: Create the Magento Open Source Project
+  command: su - {{ magento_user }} -c "composer --no-interaction create-project --repository=https://repo.magento.com/ magento/project-community-edition {{ magento_dir }}/current"
+
+- name: Set Files Permissions to g+w
+  shell: find var generated vendor pub/static pub/media app/etc -type f -exec chmod g+w {} \;
+  args:
+    chdir: "{{ magento_dir }}/current"
+
+- name: Set Directories Permissions to g+ws
+  shell: find var generated vendor pub/static pub/media app/etc -type d -exec chmod g+ws {} \;
+  args:
+    chdir: "{{ magento_dir }}/current"
+
+- name: Set Permission u+x to bin/magento
+  file:
+    path: "{{ magento_dir }}/current/bin/magento"
+    mode: u+x
+
+- name: Replace di.xml file to support mariadb 10.5
+  replace:
+    path: "{{ magento_dir }}/current/app/etc/di.xml"
+    regexp: 'MariaDB-\(10.2-10.4\)\" xsi\:type=\"string\"\>\^10\\.\[2-4'
+    replace: 'MariaDB-(10.2-10.5)" xsi:type="string">^10\.[2-5'
+  when: project_plan == "small"
+
+- name: Install Magento
+  shell: |
+    php bin/magento setup:install \
+    --base-url="https://{{ project_domain_name }}/" \
+    --base-url-secure="https://{{ project_domain_name }}/" \
+    --db-host="{{ project_db_endpoint }}" \
+    --db-name="{{ project_admin_name }}" \
+    --db-user="{{ project_admin_name }}" \
+    --db-password="{{ db_user_pass }}" \
+    --backend-frontname="{{ backend_frontname }}" \
+    --admin-firstname="{{ user_project_firstname }}" \
+    --admin-lastname="{{ user_project_lastname }}" \
+    --admin-email="{{ user_project_email }}" \
+    --admin-user="{{ project_admin_name }}" \
+    --admin-password="{{ db_user_pass }}" \
+    --language="{{ language }}" \
+    --currency="{{ currency }}" \
+    --timezone="{{ timezone }}" \
+    --use-rewrites="{{ use_rewrites }}" \
+    --elasticsearch-host="{{ elasticsearch_private_ip }}" \
+    --http-cache-hosts=localhost:6081 \
+    --session-save=redis \
+    --session-save-redis-host="{{ project_cache_endpoint }}" \
+    --session-save-redis-port=6379 \
+    --session-save-redis-db=2 \
+    --session-save-redis-max-concurrency=20 \
+    --cache-backend=redis \
+    --cache-backend-redis-server="{{ project_cache_endpoint }}" \
+    --cache-backend-redis-db=0 \
+    --cache-backend-redis-port=6379 \
+    --page-cache=redis \
+    --page-cache-redis-server="{{ project_cache_endpoint }}" \
+    --page-cache-redis-db=1 \
+    --page-cache-redis-port=6379 
+  args:
+    chdir: "{{ magento_dir }}/current"
+
+- name: Disable Magento_TwoFactorAuth module
+  shell: bin/magento module:disable Magento_TwoFactorAuth
+  args:
+    chdir: "{{ magento_dir }}/current"
+
+- name: Flush Cache
+  shell: php bin/magento cache:flush
+  args:
+    chdir: "{{ magento_dir }}/current"
+  notify:
+  - Restart Nginx Service
+  
+- name: Set Files and Directories Group User
+  file:
+    dest: "{{ magento_dir }}/current"
+    group: www-data
+    owner: "{{ magento_user }}"
+    recurse: yes
+  notify:
+  - Restart PHP-FPM Service

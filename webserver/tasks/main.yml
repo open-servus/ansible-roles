@@ -1,0 +1,132 @@
+---
+- hostname:
+    name: "{{ project_admin_name }}"
+
+- name: Edit hosts file
+  lineinfile:
+    path: /etc/hosts
+    state: present
+    insertafter: EOF
+    line: "{{ admin_private_ip }} {{ project_admin_name }}"
+
+- name: Install Nginx
+  apt:
+    name: nginx
+    state: latest
+
+###===Create dir
+- name: Creates php error directory
+  file:
+    path: "{{ php_log_dir }}"
+    state: directory
+    mode: '775'
+
+- name: Creates php error directory
+  file:
+    path: "{{ php_log_dir }}/error.log"
+    state: touch
+    mode: '775'
+    owner: prod
+    group: www-data
+
+- name: Creates Nginx directory
+  file:
+    path: "{{ nginx_log_dir }}"
+    state: directory
+    mode: '775'
+
+- name: Creates Nginx error directory
+  file:
+    path: "{{ nginx_log_dir }}/error.log"
+    state: touch
+    mode: '775'
+    owner: prod
+    group: www-data
+
+- name: Creates Nginx acc directory
+  file:
+    path: "{{ nginx_log_dir }}/access.log"
+    state: touch
+    mode: '775'
+    owner: prod
+    group: www-data
+
+- name: Creates cert ssl directory
+  file:
+    path: /etc/nginx/ssl
+    state: directory
+
+###====
+
+- name: Add Nginx CA Configuration File
+  template:
+    src: self-ca-cert.j2
+    dest: /etc/nginx/ssl/self-ca-cert.pem
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+
+- name: Add Nginx Key Configuration File
+  template:
+    src: self-ca-key.j2
+    dest: /etc/nginx/ssl/self-ca-key.pem
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+
+- name: Add Nginx Main Configuration File
+  template:
+    src: nginx.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0640'
+
+- name: Edit fastcgi_buffers param
+  lineinfile:
+    path: /etc/nginx/fastcgi_params
+    state: present
+    insertafter: EOF
+    line: "fastcgi_buffers 16 32k;"
+
+- name: Edit fastcgi_buffer_size param
+  lineinfile:
+    path: /etc/nginx/fastcgi_params
+    state: present
+    insertafter: EOF
+    line: "fastcgi_buffer_size 32k;"
+
+
+- name: Add Prod Configuration File
+  template:
+    src: prod.j2
+    dest: /etc/nginx/sites-available/default
+    owner: root
+    group: root
+    mode: '0640'
+
+- name: Add CDN Configuration File
+  template:
+    src: cdn.j2
+    dest: /etc/nginx/sites-available/cdn
+    owner: root
+    group: root
+    mode: '0640'
+
+- name: Create Symbolic Link
+  file:
+    src: /etc/nginx/sites-available/default
+    dest: /etc/nginx/sites-enabled/default
+    owner: root
+    group: root
+    state: link
+  notify:
+  - Reload Nginx Configuration
+
+- name: Start Nginx Service
+  service:
+    name: nginx
+    state: started
+    enabled: true

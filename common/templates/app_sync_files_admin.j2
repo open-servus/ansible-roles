@@ -1,0 +1,2 @@
+#!/bin/bash
+rsync --delete --owner --group --exclude '/shared' -lave "ssh -i /root/.ssh/sync_files" root@{{ admin_private_ip }}:{{ magento_dir }}/ {{ magento_dir }}/
