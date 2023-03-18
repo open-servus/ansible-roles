@@ -49,6 +49,7 @@
     owner: "{{ magento_user }}"
   loop:
     - "{{ magento_dir }}/shared/pub"
+    - "{{ magento_dir }}/shared/pub/static"
     - "{{ magento_dir }}/shared/scripts"
     - "{{ magento_dir }}/releases/release1"
 
