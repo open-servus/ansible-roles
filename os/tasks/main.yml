@@ -32,3 +32,9 @@
     
 - name: set as default locale
   command: localedef -i en_US -f UTF-8 en_US.UTF-8
+
+#dir struct
+- name: create directory admin
+  file:
+    path: "/home/admin"
+    state: directory
