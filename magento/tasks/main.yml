@@ -8,7 +8,7 @@
     path: "{{ magento_dir }}/current"
 
 - name: Create the Magento Open Source Project
-  command: su - {{ magento_user }} -c "composer --no-interaction create-project --repository=https://repo.magento.com/ magento/project-community-edition {{ magento_dir }}/current"
+  command: su - {{ magento_user }} -c "composer --no-interaction create-project --repository=https://repo.magento.com/ magento/project-community-edition={{ magento_ver }} {{ magento_dir }}/current"
 
 - name: Set Files Permissions to g+w
   shell: find var generated vendor pub/static pub/media app/etc -type f -exec chmod g+w {} \;
