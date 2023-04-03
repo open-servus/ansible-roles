@@ -1,0 +1,5 @@
+---
+- name: Restart Varnish Service
+  service:
+    name: "varnish"
+    state: restarted

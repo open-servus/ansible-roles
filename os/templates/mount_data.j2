@@ -1,0 +1,22 @@
+#!/bin/bash -xe
+
+DEVICE=/dev/sdc
+
+FS_TYPE=$(file -s $DEVICE | awk '{print $2}')
+MOUNT_POINT=/mnt/home
+
+# If no FS, then this output contains "data"
+if [ "$FS_TYPE" == "data" ]
+then
+    echo "Creating file system on $DEVICE"
+    mkfs -t ext4 $DEVICE
+
+    mkdir $MOUNT_POINT
+    mount $DEVICE $MOUNT_POINT
+    cp -rfp /home/* $MOUNT_POINT/
+
+    UUID_VAR=$(blkid -s UUID -o value $DEVICE)
+
+    echo "UUID=$UUID_VAR /home ext4 defaults,nofail  0 2" >> /etc/fstab
+    reboot
+fi
