@@ -1,0 +1,6 @@
+my_pass: "{{ lookup('password', '/dev/null length=15 chars=ascii_letters') }}"
+project_db_endpoint: localhost
+magento_dir: "/home/mon/htdocs/prod"
+magento_user: prod
+#pma_project_url: https://files.phpmyadmin.net/phpMyAdmin/5.2.1/phpMyAdmin-5.2.1-all-languages.zip
+pma_project_url: https://www.phpmyadmin.net/downloads/phpMyAdmin-latest-all-languages.zip

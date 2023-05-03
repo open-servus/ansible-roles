@@ -1,0 +1,48 @@
+---
+- name: Delete .pma content & directory if exists
+  file:
+    state: absent
+    path: "{{ magento_dir }}/.pma"
+
+- name: download source PhpMyAdmin
+  get_url:
+    url: "{{ pma_project_url }}"
+    dest: "/tmp/pma.zip"
+
+- name:  Extract PhpMyAdmin
+  unarchive:
+    src: "/tmp/pma.zip"
+    dest: "/tmp/pma"
+    remote_src: yes
+    list_files: yes
+  register: archive_contents
+
+- name: Copy file with owner and permissions
+  copy:
+    src: "/tmp/pma/{{ archive_contents.files[0]}}"
+    dest: "{{ magento_dir }}/.pma"
+    remote_src: yes
+  
+- name: Move config file
+  command: mv "{{ magento_dir }}/.pma/config.sample.inc.php" "{{ magento_dir }}/.pma/config.inc.php"
+
+- name: Replace localhost with the project db endpoint
+  replace:
+    path: "{{ magento_dir }}/.pma/config.inc.php"
+    regexp: 'localhost'
+    replace: "{{ project_db_endpoint }}"
+
+- name: Add blowfish_secret with random string
+  replace:
+    path: "{{ magento_dir }}/.pma/config.inc.php"
+    regexp: "\\$cfg\\[\\'blowfish_secret\\'\\] = \\'\\'"
+    replace: "$cfg['blowfish_secret'] = 'eui2_38{{ my_pass }}9238ifyerh'"
+
+- name: Set Files and Directories Group User
+  file:
+    dest: "{{ magento_dir }}/.pma"
+    group: www-data
+    owner: "{{ magento_user }}"
+    recurse: yes
+  notify:
+  - Restart PHP-FPM Service
