@@ -32,3 +32,21 @@
     
 - name: set as default locale
   command: localedef -i en_US -f UTF-8 en_US.UTF-8
+
+#dir struct
+- name: create directory admin
+  file:
+    path: "/home/admin"
+    state: directory
+
+- name: Add mount_data Bash File
+  template:
+    src: mount_data.j2
+    dest: /home/admin/mount_data.sh
+    owner: root
+    group: root
+    mode: '0774'
+    backup: yes
+
+- name: Run mount_data script
+  command: /home/admin/mount_data.sh

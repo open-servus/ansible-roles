@@ -49,6 +49,7 @@
     owner: "{{ magento_user }}"
   loop:
     - "{{ magento_dir }}/shared/pub"
+    - "{{ magento_dir }}/shared/pub/static"
     - "{{ magento_dir }}/shared/scripts"
     - "{{ magento_dir }}/releases/release1"
 
@@ -118,6 +119,7 @@
     group: www-data
     owner: "{{ magento_user }}"
     state: link
+    follow: False
 
 - name: Create media symbolic link
   ansible.builtin.file:
@@ -126,6 +128,7 @@
     group: www-data
     owner: "{{ magento_user }}"
     state: link
+    follow: False
 
 - name: Copy file and set up the permission and owner of the file
   template:

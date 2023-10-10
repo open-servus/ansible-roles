@@ -1,0 +1,26 @@
+- name: Set host name
+  hostname:
+    name: "{{ project_cache_name }}"
+
+- name: Update apt packages list
+  apt:
+    update_cache: yes
+
+- name: Installing Varnish Server
+  apt:
+    name: "{{ packages }}"
+    state: "present"
+    force_apt_get: yes
+  vars:
+    packages:
+      - 'varnish'
+
+- name: Add Varnish Configuration
+  template:
+    src: varnish.j2
+    dest: "/etc/varnish/default.vcl"
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+  - Restart Varnish Service
