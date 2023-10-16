@@ -1,6 +1,7 @@
 - name: Set host name
   hostname:
     name: "{{ project_nfs_name }}"
+  when: project_plan != "small"
 
 - name: Update apt packages list
   apt:

@@ -99,6 +99,7 @@
     fstype: nfs
     opts: rw
     state: mounted
+  when: project_plan != "small"
 
 #dir struct
 - name: create directory struct

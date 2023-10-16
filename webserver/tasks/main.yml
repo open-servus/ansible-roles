@@ -1,6 +1,7 @@
 ---
 - hostname:
     name: "{{ project_admin_name }}"
+  when: project_plan != "small"
 
 - name: Edit hosts file
   lineinfile:
