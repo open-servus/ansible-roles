@@ -1,0 +1,5 @@
+magento_dir: "/home/mon/htdocs/prod"
+magento_user: prod
+project_admin_name: openservice
+db_user_pass: 123qwe
+admin_private_ip: 127.0.0.1
