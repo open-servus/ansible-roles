@@ -16,12 +16,12 @@
     mode: '0774'
     backup: yes
 
-- name: Replace master with root
-  replace:
-    path: "/home/admin/sql_command.sh"
-    regexp: "umaster"
-    replace: "uroot"
-  when: project_plan == "small"
+# - name: Replace master with root
+#   replace:
+#     path: "/home/admin/sql_command.sh"
+#     regexp: "umaster"
+#     replace: "uroot"
+#   when: project_plan == "small"
 
 - name: Run SQL Command
   command: /home/admin/sql_command.sh
