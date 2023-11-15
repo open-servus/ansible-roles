@@ -166,13 +166,15 @@
     state: present
 
 - name: Ensure NFS check job that runs every minute
-  cron:
-    name: "check nfs"
-    minute: "*/1"
-    job: "/root/check_data_nfs.sh &> /dev/null"
-
+  template:
+    src: nfs_cron_jobs.j2
+    dest: "/etc/cron.d/nfs_cron_jobs"
+    mode: '644'
+  when: project_plan != "small"
+  
 - name: Ensure synch files job that runs at startup
-  cron:
-    name: "Synch files"
-    special_time: reboot
-    job: "! /root/check_admin.sh && /etc/init.d/nginx stop && /root/app_sync_files.sh &> /dev/null"
+  template:
+    src: admin_cron_jobs.j2
+    dest: "/etc/cron.d/admin_cron_jobs"
+    mode: '644'
+  when: project_plan != "small"
