@@ -1,0 +1,10 @@
+---
+- name: restart nginx
+  service:
+    name: nginx
+    state: restarted
+
+- name: restart php{{ php_version }}-fpm
+  service:
+    name: php{{ php_version }}-fpm
+    state: restarted

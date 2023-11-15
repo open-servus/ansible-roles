@@ -1,0 +1,111 @@
+---
+- name: update apt
+  apt:
+    update_cache: yes
+
+- name: opencart download
+  get_url:
+    url: "{{ opencart_download_url }}"
+    dest: "/tmp/opencart.zip"
+
+- name: opencart directory build
+  file:
+    path: "{{ opencart_install_dir }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  run_once: true
+
+- name: opencart tmp directory
+  file:
+    path: "/tmp/opencart"
+    state: directory
+  run_once: true
+
+- name: unzip opencart
+  unarchive:
+    src: "/tmp/opencart.zip"
+    dest: "/tmp/opencart"
+    remote_src: yes
+    list_files: yes
+  become: yes
+  register: archive_contents
+
+- name: Copy file with owner and permissions
+  copy:
+    src: "/tmp/opencart/{{ archive_contents.files[0]}}"
+    dest: "{{ opencart_install_dir }}"
+    remote_src: yes
+
+- name: copy config
+  copy:
+    src: "{{ opencart_install_dir }}/upload/config-dist.php"
+    dest: "{{ opencart_install_dir }}/upload/config.php"
+    remote_src: yes
+
+- name: remove old config
+  file: 
+    path: "{{ opencart_install_dir }}/upload/config-dist.php"
+    state: absent
+    
+- name: copy admin config
+  copy:
+    src: "{{ opencart_install_dir }}/upload/admin/config-dist.php"
+    dest: "{{ opencart_install_dir }}/upload/admin/config.php"
+    remote_src: yes
+
+- name: remove old admin config
+  file: 
+    path: "{{ opencart_install_dir }}/upload/admin/config-dist.php"
+    state: absent
+
+- name: Set Files and Directories Group User
+  file:
+    dest: "{{ opencart_install_dir }}"
+    group: www-data
+    owner: www-data
+    recurse: yes
+
+- name: opencart permissions
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: www-data
+    group: www-data
+    mode: '0755'
+  with_items:
+    - "{{ opencart_install_dir }}/upload/system/storage/"
+    - "{{ opencart_install_dir }}/upload/system/config/"
+    - "{{ opencart_install_dir }}/upload/image/"
+    - "{{ opencart_install_dir }}/upload/image/cache/"
+    - "{{ opencart_install_dir }}/upload/image/catalog/"
+    - "{{ opencart_install_dir }}/upload/system/logs/"
+    - "{{ opencart_install_dir }}/upload/system/download/"
+    - "{{ opencart_install_dir }}/upload/system/upload/"
+    - "{{ opencart_install_dir }}/upload/system/modification/"
+
+- name: nginx server block for opencart
+  template:
+    src: "nginx.conf.j2"
+    dest: "/etc/nginx/sites-available/default"
+  with_items: "{{ nginx_sites }}"
+  notify:
+    - restart nginx
+
+- name: enable server block
+  file:
+    src: "/etc/nginx/sites-available/default"
+    dest: "/etc/nginx/sites-enabled/default"
+    state: link
+  with_items: "{{ nginx_sites }}"
+  notify:
+    - restart nginx
+
+- name: Configure Opencart
+  command: php {{ opencart_install_dir }}/upload/install/cli_install.php install --db_hostname localhost --db_username {{ db_user }} --db_password {{ db_password }} --db_database {{ db_name }} --username admin --password admin --email somebody@somewhere.com --http_server http://{{ lookup('ansible.builtin.env', 'EC2_PUBLIC_IP') }}/
+
+- name: Recursively remove directory
+  ansible.builtin.file:
+    path: "{{ opencart_install_dir }}/upload/install"
+    state: absent

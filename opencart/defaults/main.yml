@@ -1,0 +1,5 @@
+---
+opencart_db_name: "opencart"
+opencart_db_user: "opencart"
+opencart_db_password: "opencart"
+php_version: 8.2

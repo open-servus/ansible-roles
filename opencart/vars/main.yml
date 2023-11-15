@@ -1,0 +1,9 @@
+---
+nginx_sites:
+  - server_name: "{{ nginx_server_name }}"
+    root: "/var/www/html"
+    index: "index.php index.html index.htm"
+
+opencart_version: "4.0.2.3"
+opencart_download_url: "https://github.com/opencart/opencart/releases/download/{{ opencart_version }}/opencart-{{ opencart_version }}.zip"
+opencart_install_dir: "/var/www/html/opencart"
