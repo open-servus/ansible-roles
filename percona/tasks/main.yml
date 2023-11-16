@@ -1,0 +1,84 @@
+---
+- name: Update apt packages list
+  apt:
+    update_cache: yes
+
+- name: download source Percona deb
+  get_url:
+    url: "{{ percona_deb_url }}"
+    dest: "/tmp/percona-release_latest.generic_all.deb"
+
+
+- name: Install a Percona.deb package
+  apt:
+    deb: "/tmp/percona-release_latest.generic_all.deb"
+
+- name: Update apt packages list
+  apt:
+    update_cache: yes
+
+- name: Setup Percona release
+  shell: sudo percona-release setup ps80
+
+- name: Installing Packages
+  apt:
+    name: "{{ packages }}"
+    state: "present"
+    force_apt_get: yes
+  vars:
+    packages:
+      - 'percona-server-server'
+
+- name: Add MySQL_Server File
+  template:
+    src: dbserver.j2
+    dest: /home/admin/dbserver.sql
+    owner: root
+    group: root
+    mode: '0644'
+    backup: yes
+- name: Add MySQL_Server Command File
+  template:
+    src: sql_server.j2
+    dest: /home/admin/sql_server.sh
+    owner: root
+    group: root
+    mode: '0774'
+    backup: yes
+
+- name: Run MySQL_Server Command
+  command: /home/admin/sql_server.sh
+
+# - name: Stop Mariadb Service
+#   service:
+#     name: mariadb
+#     state: stopped
+
+# - name: Check MySQL dir destination
+#   stat:
+#     path: /home/mysql
+#   register: p
+
+# - name: Move MySQL path directory
+#   command: mv "/var/lib/mysql" "/home/"
+#   when: p.stat.exists == False
+
+# - name: Create MySQL symbolic link
+#   file:
+#     src: "/home/mysql"
+#     dest: "/var/lib/mysql"
+#     owner: mysql
+#     group: mysql
+#     state: link
+
+# - name: Disable protect home mysql
+#   replace:
+#     path: "/lib/systemd/system/mariadb.service"
+#     regexp: "ProtectHome=true"
+#     replace: "ProtectHome=false"
+
+# - name: Start Mariadb Service
+#   service:
+#     name: mariadb
+#     state: restarted
+#     daemon_reload: yes
