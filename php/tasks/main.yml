@@ -8,7 +8,7 @@
     name: [
      "php{{ php_version }}",
      "php{{ php_version }}-fpm",
-     "php{{ php_version }}-json",
+     #"php{{ php_version }}-json",
      "php{{ php_version }}-opcache",
      "php{{ php_version }}-xml",
      "php{{ php_version }}-bcmath",
