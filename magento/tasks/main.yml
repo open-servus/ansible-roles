@@ -69,6 +69,11 @@
   args:
     chdir: "{{ magento_dir }}/current"
 
+- name: Disable Magento_AdminAdobeImsTwoFactorAuth module
+  shell: bin/magento module:disable Magento_AdminAdobeImsTwoFactorAuth
+  args:
+    chdir: "{{ magento_dir }}/current"
+
 - name: Disable Magento_TwoFactorAuth module
   shell: bin/magento module:disable Magento_TwoFactorAuth
   args:

@@ -16,6 +16,15 @@
     mode: '0774'
     backup: yes
 
+# - name: configure mysql client
+#   template:
+#     src: .my.j2.cnf
+#     dest: "{{ item.home }}/.my.cnf"
+#     mode: 0600
+#     owner: "{{ item.user }}"
+#   with_items:
+#     - { user: root, home: "/root" }
+
 # - name: Replace master with root
 #   replace:
 #     path: "/home/admin/sql_command.sh"

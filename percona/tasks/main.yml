@@ -24,7 +24,6 @@
   apt:
     name: "{{ packages }}"
     state: "present"
-    force_apt_get: yes
   vars:
     packages:
       - 'percona-server-server'
