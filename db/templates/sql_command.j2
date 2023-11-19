@@ -1,2 +1,3 @@
 #!/bin/bash
-mysql -h'{{ project_db_endpoint }}' -u'{{ project_db_username | default('master')}}' -p'{{ aws_rds_master_pass }}' < /home/admin/db.sql
+MYSQL_PWD={{ aws_rds_master_pass }}
+mysql -h'{{ project_db_endpoint }}' -u'{{ project_db_username | default('master')}}' < /home/admin/db.sql
