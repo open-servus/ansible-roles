@@ -1,0 +1,14 @@
+---
+- name: Download awscliv2
+  get_url:
+    url: "{{ awscli2_download_url }}"
+    dest: "/opt/awscliv2.zip"
+
+- name: unzip awscliv2
+  unarchive:
+    src: "/opt/awscliv2.zip"
+    dest: "/opt"
+    remote_src: yes
+
+- name: Install awscli
+  command: sudo /opt/aws/install
