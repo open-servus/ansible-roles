@@ -1,0 +1,50 @@
+{
+    "name": "hpe-pull-user",
+    "level": "system",
+    "duration": -1,
+    "description": "hpe-pull-user",
+    "permissions": [
+      {
+        "access": [
+          {
+            "action": "pull",
+            "resource": "repository"
+          },
+          {
+            "action": "list",
+            "resource": "repository"
+          },
+          {
+            "action": "read",
+            "resource": "helm-chart"
+          },
+          {
+            "action": "create",
+            "resource": "helm-chart-version-label"
+          },
+          {
+            "action": "delete",
+            "resource": "helm-chart-version-label"
+          },
+          {
+            "action": "list",
+            "resource": "artifact"
+          },
+          {
+            "action": "read",
+            "resource": "artifact"
+          },
+          {
+            "action": "list",
+            "resource": "tag"
+          },
+          {
+            "action": "create",
+            "resource": "artifact-label"
+          }
+        ],
+        "kind": "project",
+        "namespace": "hpe"
+      }
+    ]
+  }

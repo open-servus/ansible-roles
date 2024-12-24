@@ -1,0 +1,12 @@
+#Harbor Logs rotation
+/var/log/harbor/*.log {
+    weekly
+    missingok
+    compress
+    rotate 50
+    delaycompress
+    dateext
+    dateformat -%Y-%m-%d
+    sharedscripts
+    copytruncate
+}

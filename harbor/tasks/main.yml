@@ -1,0 +1,193 @@
+---
+  - name: Create "{{ harbor_process_group }}"  group
+    group:
+      name: "{{ harbor_process_group }}"
+      state: present
+
+  - name: Create "{{ harbor_process_owner }}"  user
+    user:
+      name: "{{ harbor_process_owner }}"
+      group: "{{ harbor_process_group }}"
+      create_home: no
+      shell: /bin/false
+      state: present
+
+  - name: Allow Harbor user to run Docker commands without sudo
+    user:
+      name: "{{ harbor_process_owner }}"
+      groups: docker
+      append: yes
+
+  - name: Create harbor folder and certs directory
+    file:
+      path: "{{ harbor_home }}/certs"
+      state: directory
+      mode: '0755'
+      owner: "{{ harbor_process_owner }}"
+      group: "{{ harbor_process_group }}"
+  
+  - name: Add Harbor CA File
+    template:
+      src: "certs/{{ inventory_hostname }}.cert.j2"
+      dest: "{{ harbor_home }}/certs/tls.cert"
+      owner: root
+      group: "{{ harbor_process_group }}"
+      mode: '0640'
+      backup: yes
+
+  - name: Add Harbor Key File
+    template:
+      src:  "certs/{{ inventory_hostname }}.key.j2"
+      dest: "{{ harbor_home }}/certs/tls.key"
+      owner: root
+      group: "{{ harbor_process_group }}"
+      mode: '0640'
+      backup: yes
+
+  ###Docker Cert #Need to use Ansible Vault in the future
+  - name: Create Docker Certs folder
+    file:
+      path: "/etc/docker/certs.d/{{ domain_harbor_name }}"
+      owner: root
+      group: root
+      mode: '0755'
+      state: directory
+
+  - name: Add Docker Cert Key File
+    template:
+      src: "certs/{{ inventory_hostname }}.key.j2"
+      dest: "/etc/docker/certs.d/{{ domain_harbor_name }}/tls.key"
+      owner: root
+      group: root
+      mode: '0640'
+
+  # - name: Need to confirm if this  CA file is needed for Docker.
+  #   template:
+  #     src: ca.crt.j2
+  #     dest: "/etc/docker/certs.d/{{ domain_harbor_name }}/ca.crt"
+  #     owner: root
+  #     group: root
+  #     mode: '0644'
+
+  - name: Add Docker Cert File
+    template:
+      src:  "certs/{{ inventory_hostname }}.cert.j2"
+      dest: "/etc/docker/certs.d/{{ domain_harbor_name }}/tls.cert"
+      owner: root
+      group: root
+      mode: '0644'
+
+## Use docker mirror registry in case specified
+  - name: Setup mirror registry 
+    template:
+      src: daemon.json.j2
+      dest: "{{ docker_directory_registry }}/daemon.json"
+      owner: root
+      group: root
+      mode: '0775'
+    when: registry_mirrors_url != ""
+
+
+  - name: Restart docker service
+    service:
+      name: docker
+      state: restarted
+  ###
+
+  - name: Check if Harbor is already installed
+    stat: path={{ harbor_home }}/harbor/docker-compose.yml
+    register: harbor_installed
+
+  - name: Download harbor
+    unarchive:
+      src: https://github.com/goharbor/harbor/releases/download/v{{ harbor_version}}/harbor-online-installer-v{{ harbor_version }}.tgz
+      dest: "{{ harbor_home }}"
+      remote_src: yes
+    environment: 
+      https_proxy: "{{ http_proxy_var }}"
+
+  - name: Copy harbor.yml.tmpl to harbor.yml
+    ansible.builtin.copy:
+      src: "{{ harbor_home }}/harbor/harbor.yml.tmpl"
+      dest: "{{ harbor_home }}/harbor/harbor.yml"
+      owner: root
+      group: root
+      mode: '0640'
+      remote_src: yes
+    when: not harbor_installed.stat.exists
+
+  - name: Update ipv4 address to access the harbor
+    lineinfile:
+      path: "{{ harbor_home }}/harbor/harbor.yml"
+      regexp: '^hostname: (.*)$'
+      line: "hostname: {{ ansible_host }}"
+    when: not harbor_installed.stat.exists
+
+  - name: Update harbor data directory path
+    lineinfile:
+      path: "{{ harbor_home }}/harbor/harbor.yml"
+      regexp: '^data_volume: (.*)$'
+      line: "data_volume: {{ harbor_home }}/data"
+    when: not harbor_installed.stat.exists
+
+  - name: Configure global HTTPS_PROXY harbor
+    lineinfile:
+      path: "{{ harbor_home }}/harbor/harbor.yml"
+      regexp: '  https_proxy:(.*)$'
+      line: "  https_proxy: {{ http_proxy_var }}"
+    when: not harbor_installed.stat.exists
+
+  ## Use HTTPS 
+  - name: Configure certifacte entry
+    replace:
+      path: "{{ harbor_home }}/harbor/harbor.yml"
+      regexp: '(.*certificate:.*)'
+      replace: '  certificate: {{ harbor_home }}/certs/tls.cert'
+    when: not harbor_installed.stat.exists
+
+  - name: Configure private key entry
+    replace:
+      path: "{{ harbor_home }}/harbor/harbor.yml"
+      regexp: '(.*private_key:.*)'
+      replace: '  private_key: {{ harbor_home }}/certs/tls.key'
+    when: not harbor_installed.stat.exists
+
+  - name: Configure Harbor Admin password
+    replace:
+      path: "{{ harbor_home }}/harbor/harbor.yml"
+      regexp: '^harbor_admin_password: (.*)$'
+      replace: 'harbor_admin_password: {{ harbor_admin_password }}'
+    when: not harbor_installed.stat.exists
+
+  - name: Configure Harbor DB password
+    replace:
+      path: "{{ harbor_home }}/harbor/harbor.yml"
+      regexp: '(.*password: root123.*)'
+      replace: '  password: {{ harbor_db_password }}'
+    when: not harbor_installed.stat.exists
+
+  - name: Start Harbor with support for Helm chart repositories and trivy
+    shell: "./install.sh --with-chartmuseum --with-trivy"
+    args:
+      chdir: "{{ harbor_home }}/harbor"
+    register: compose_up
+    when: not harbor_installed.stat.exists
+    
+  - name: Check Harbor installation status
+    shell: "docker-compose ps"
+    args:
+      chdir: "{{ harbor_home }}/harbor"
+    register: compose_ps
+
+  - name: List of active Harbor containers
+    debug: msg="{{ compose_ps.stdout }}"
+
+  - name: Emit Harbor URL
+    command: echo "Harbor can be accessed at, https://{{ ansible_host }}"
+    register: harbor_url
+
+  - name: Harbor URL info
+    debug: msg="{{ harbor_url.stdout }}"
+
+  - name: setup harbor service
+    include_tasks: service.yml

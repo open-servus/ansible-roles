@@ -1,0 +1,90 @@
+{
+    "name": "hpe-push-user",
+    "level": "system",
+    "duration": -1,
+    "description": "hpe-push-user",
+    "permissions": [
+      {
+        "access": [
+          {
+            "action": "pull",
+            "resource": "repository"
+          },
+          {
+            "action": "push",
+            "resource": "repository"
+          },
+          {
+            "action": "list",
+            "resource": "repository"
+          },
+          {
+            "action": "delete",
+            "resource": "repository"
+          },
+          {
+            "action": "read",
+            "resource": "helm-chart"
+          },
+          {
+            "action": "create",
+            "resource": "helm-chart-version"
+          },
+          {
+            "action": "delete",
+            "resource": "helm-chart-version"
+          },
+          {
+            "action": "create",
+            "resource": "helm-chart-version-label"
+          },
+          {
+            "action": "delete",
+            "resource": "helm-chart-version-label"
+          },
+          {
+            "action": "list",
+            "resource": "artifact"
+          },
+          {
+            "action": "read",
+            "resource": "artifact"
+          },
+          {
+            "action": "delete",
+            "resource": "artifact"
+          },
+          {
+            "action": "create",
+            "resource": "tag"
+          },
+          {
+            "action": "list",
+            "resource": "tag"
+          },
+          {
+            "action": "delete",
+            "resource": "tag"
+          },
+          {
+            "action": "delete",
+            "resource": "artifact-label"
+          },
+          {
+            "action": "create",
+            "resource": "artifact-label"
+          },
+          {
+            "action": "create",
+            "resource": "scan"
+          },
+          {
+            "action": "stop",
+            "resource": "scan"
+          }
+        ],
+        "kind": "project",
+        "namespace": "hpe"
+      }
+    ]
+  }

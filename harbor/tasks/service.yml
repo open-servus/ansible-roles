@@ -1,0 +1,124 @@
+## Setup harbor service to start automatically after host reboot
+- name: Setup harbor service 
+  template:
+    src: harbor.service.j2
+    dest: "/usr/lib/systemd/system/harbor.service"
+    owner: root
+    group: root
+    mode: '0775'
+
+- name: Enable and start Harbor service
+  service:
+    name: harbor
+    state: started
+    enabled: yes
+
+- name: Setup harbor logrotate 
+  template:
+    src: harbor.logrotate.j2
+    dest: "/etc/logrotate.d/harbor"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Pause for 1 minutes Harbor be healthy
+  ansible.builtin.pause:
+    minutes: 1
+
+##=====Configure Harbor=============
+#Add project hpe
+- name: Crate Harbor Project
+  ansible.builtin.uri:
+    url: https://{{ ansible_host }}/api/v2.0/projects
+    url_username: admin
+    url_password: '{{ harbor_admin_password }}'
+    method: POST
+    headers:
+      Content-Type: application/json
+      accept: application/json
+    body: "{{ lookup('ansible.builtin.file','project.json') }}"
+    status_code: 201, 409
+    body_format: json
+    force_basic_auth: true
+    validate_certs: false
+
+#Change robot name prefix
+- name: Change robot name prefix
+  ansible.builtin.uri:
+    url: https://{{ ansible_host }}/api/v2.0/configurations
+    url_username: admin
+    url_password: '{{ harbor_admin_password }}'
+    method: PUT
+    headers:
+      Content-Type: application/json
+      accept: application/json
+    body: "{{ lookup('ansible.builtin.file','robots_prefix.json') }}"
+    body_format: json
+    force_basic_auth: true
+    validate_certs: false
+
+#Add robot pull account
+- name: Add robot pull account
+  ansible.builtin.uri:
+    url: https://{{ ansible_host }}/api/v2.0/robots
+    url_username: admin
+    url_password: '{{ harbor_admin_password }}'
+    method: POST
+    headers:
+      Content-Type: application/json
+      accept: application/json
+    body: "{{ lookup('ansible.builtin.file','robots_pull.json') }}"
+    status_code: 201,409
+    body_format: json
+    force_basic_auth: true
+    validate_certs: false
+  register: robots_pull_account
+
+
+#Add robot push account
+- name: Add robot push account
+  ansible.builtin.uri:
+    url: https://{{ ansible_host }}/api/v2.0/robots
+    url_username: admin
+    url_password: '{{ harbor_admin_password }}'
+    method: POST
+    headers:
+      Content-Type: application/json
+      accept: application/json
+    body: "{{ lookup('ansible.builtin.file','robots_push.json') }}"
+    status_code: 201,409
+    body_format: json
+    force_basic_auth: true
+    validate_certs: false
+  register: robots_push_account
+
+- name: Write pull robot account
+  ansible.builtin.lineinfile:
+    path: "../robot_hpe_account.txt"
+    line: '{{ item }}'
+    create: yes
+  with_items:
+    - 'Repository URL:'
+    - 'https://{{ ansible_host }}/hpe'
+    - ' '
+    - '#Robot Account for HPE to pull images'
+    - '{{ robots_pull_account.json.name }}'
+    - '{{ robots_pull_account.json.secret }}'
+  delegate_to: localhost
+  no_log: True
+  vars:
+    ansible_become: false
+
+- name: Write push robot account
+  ansible.builtin.lineinfile:
+    path: "../robot_hpe_account.txt"
+    line: "{{ item }}"
+  with_items:
+    - '# '
+    - '#Robot Account for HPE to push images'
+    - '{{ robots_push_account.json.name }}'
+    - '{{ robots_push_account.json.secret }}'
+  delegate_to: localhost
+  no_log: True
+  vars:
+    ansible_become: false
