@@ -1,0 +1,12 @@
+ui = true
+storage "file" {
+  path = "{{ vault_home }}/data"
+}
+listener "tcp" {
+  address       = "0.0.0.0:8200"
+  tls_cert_file = "{{ vault_home }}/tls/tls.crt"
+  tls_key_file  = "{{ vault_home }}/tls/tls.key"
+}
+
+default_lease_ttl = "{{ vault_max_lease_ttl }}"
+max_lease_ttl = "{{ vault_max_lease_ttl }}"

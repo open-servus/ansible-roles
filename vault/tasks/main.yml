@@ -1,0 +1,114 @@
+---
+
+###RedHat###
+- name: Add repository into repo.d list
+  yum_repository:
+    name: hashicorp
+    description: Hashicorp Stable - $basearch
+    baseurl: "https://rpm.releases.hashicorp.com/RHEL/$releasever/$basearch/stable"
+    enabled: true
+    gpgcheck: 1
+    gpgkey: "https://rpm.releases.hashicorp.com/gpg"
+    proxy: "{{ os_pkg_proxy }}"
+    proxy_password: "{{ os_pkg_proxy_password }}"
+    proxy_username: "{{ os_pkg_proxy_username }}"
+  when: ansible_os_family == "RedHat"
+
+- name: Update the cache
+  yum:
+    update_cache: yes
+  when: ansible_os_family == "RedHat"
+
+- name: Install Vault CLI on VM
+  yum:
+    name:
+      - "vault"
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Permit traffic in default zone on port 8200/tcp on default zone
+  ansible.posix.firewalld:
+    port: 8200/tcp
+    permanent: yes
+    state: enabled
+  when: ansible_os_family == "RedHat"
+###RedHat###
+
+###Debian###
+- name: Add gpg key
+  apt_key:
+    url: https://apt.releases.hashicorp.com/gpg
+    state: present
+  environment: 
+    https_proxy: "{{ http_proxy_var }}"
+  when: ansible_os_family == "Debian"
+
+- name: Add repository into repo.d list
+  apt_repository:
+    repo: deb https://apt.releases.hashicorp.com bullseye main
+    state: present
+    filename: vault
+  environment: 
+    https_proxy: "{{ http_proxy_var }}"
+  when: ansible_os_family == "Debian"
+
+- name: Update apt packages list
+  apt:
+    update_cache: yes
+  environment: 
+    https_proxy: "{{ http_proxy_var }}"
+  when: ansible_os_family == "Debian"
+
+- name: Install Vault CLI on VM
+  apt:
+    name: 
+      - "vault"
+    state: present
+  environment: 
+    https_proxy: "{{ http_proxy_var }}"
+  when: ansible_os_family == "Debian"
+
+- name: Add Vault CA File
+  template:
+    src: "certs/self-ca-cert.j2"
+    dest: "{{ vault_home }}/tls/tls.crt"
+    owner: "{{ vault_user }}"
+    group: root
+    mode: '0644'
+    backup: yes
+
+- name: Add Vault Key File
+  template:
+    src:  "certs/self-ca-key.j2"
+    dest: "{{ vault_home }}/tls/tls.key"
+    owner: "{{ vault_user }}"
+    group: root
+    mode: '0644'
+    backup: yes
+
+- name: Add Vault Config File
+  template:
+    src:  "vault.hcl.j2"
+    dest: "{{ vault_config }}/vault.hcl"
+    owner: "{{ vault_user }}"
+    group: root
+    mode: '0664'
+    backup: yes
+
+
+- name: Create Vault logs directory
+  file:
+    path: "{{ vault_home }}/logs"
+    state: directory
+    mode: '0750'
+    owner: "{{ vault_user }}"
+    group: root
+
+- name: Start Vault Service
+  service:
+    name: vault
+    state: started
+    enabled: yes
+
+- name: setup vault admin
+  include_tasks: config.yml

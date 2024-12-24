@@ -1,0 +1,115 @@
+- name: Initialise Vault operator
+  shell: vault operator init -key-shares={{ vault_key_shares }} -key-threshold={{ vault_key_threshold }} -format json
+  register: vault_init_results
+
+- name: Parse output of vault init
+  set_fact:
+    vault_init_parsed: "{{ vault_init_results.stdout | from_json }}"
+
+- name: Clean vault keys file
+  file: path="{{ vault_keys_file }}" state=absent
+  delegate_to: localhost
+  
+- name: Write unseal keys to files
+  ansible.builtin.lineinfile:
+    path: "{{ vault_keys_file }}"
+    line: "unseal_key_{{ item.0 }}: {{ item.1 }}"
+    create: yes
+  with_indexed_items: "{{ vault_init_parsed.unseal_keys_hex }}"
+  delegate_to: localhost
+
+- name: Write root token to file
+  ansible.builtin.lineinfile:
+    path: "{{ vault_keys_file }}"
+    line: "rootkey: {{ vault_init_parsed.root_token }}"
+  delegate_to: localhost
+
+
+##Unseal
+- name: Unseal vault with unseal keys
+  shell: |
+    vault operator unseal {{ item.1 }}
+  with_indexed_items: "{{ vault_init_parsed.unseal_keys_hex }}"
+
+
+##Configure Autounseal
+
+- name: Enable Audit logs
+  shell: vault audit enable file file_path={{ vault_home }}/logs/audit.log
+  environment:
+    VAULT_TOKEN: "{{ vault_init_parsed.root_token }}"
+
+- name: Enable enable tansit
+  shell: vault secrets enable transit
+  environment:
+    VAULT_TOKEN: "{{ vault_init_parsed.root_token }}"
+
+- name: Create key autounseal
+  shell: vault write -f transit/keys/autounseal
+  environment:
+    VAULT_TOKEN: "{{ vault_init_parsed.root_token }}"
+
+- name: Add autounseal config file
+  template:
+    src:  "autounseal.hcl.j2"
+    dest: "{{ vault_config }}/autounseal.hcl"
+    owner: "{{ vault_user }}"
+    group: root
+    mode: '0664'
+    backup: yes
+
+- name: Write autounseal policy
+  shell: vault policy write autounseal {{ vault_config }}/autounseal.hcl
+  environment:
+    VAULT_TOKEN: "{{ vault_init_parsed.root_token }}"
+
+- name: Create a client token
+  shell: vault token create -policy="autounseal" -wrap-ttl=600 -format json
+  register: vault_token_results
+  environment:
+    VAULT_TOKEN: "{{ vault_init_parsed.root_token }}"
+
+
+- name: Parse output of client token
+  set_fact:
+    vault_token_parsed: "{{ vault_token_results.stdout | from_json }}"
+
+
+- name: Initialise Vault operator
+  shell: VAULT_TOKEN="{{ vault_token_parsed.wrap_info.token }}" vault unwrap -format json
+  register: vault_token_unwrap
+  environment:
+    VAULT_TOKEN: "{{ vault_init_parsed.root_token }}"
+
+- name: Parse output of client token
+  set_fact:
+    vault_token_unwrap_parsed: "{{ vault_token_unwrap.stdout | from_json }}"
+
+- name: Clean admin vault file
+  file: path="{{ admin_vault_file }}" state=absent
+  delegate_to: localhost
+
+- name: Write client token to file
+  ansible.builtin.lineinfile:
+    path: "{{ admin_vault_file }}"
+    line: "unwrap_info_token: {{ vault_token_unwrap_parsed.auth.client_token }}"
+    create: yes
+  delegate_to: localhost
+
+- name: Write Vault Admin Host to file
+  ansible.builtin.lineinfile:
+    path: "{{ admin_vault_file }}"
+    line: "vault_admin_host: {{ ansible_host }}"
+  delegate_to: localhost
+
+- name: Encrypt vault keys file
+  shell: ansible-vault encrypt {{ vault_keys_file }}
+  args:
+    chdir: ../
+  delegate_to: localhost
+
+- name: Encrypt client token file
+  shell: ansible-vault encrypt {{ admin_vault_file }}
+  args:
+    chdir: ../
+  delegate_to: localhost

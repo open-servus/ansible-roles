@@ -1,0 +1,11 @@
+---
+vault_version: "1.10.2"
+vault_user: "vault"
+vault_group: "{{ vault_user }}"
+vault_home: "/opt/vault"
+vault_config: "/etc/vault.d"
+vault_key_shares: "1"
+vault_key_threshold: "1"
+vault_keys_file: "{{ playbook_dir }}/group_vars/hashicorp_vault.enc.yml"
+admin_vault_file: "{{ playbook_dir }}/../terraform-environment-config/secrets/vaults/admin_vault.enc.yml"
+vault_max_lease_ttl: "8760h"
