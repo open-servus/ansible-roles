@@ -1,0 +1,151 @@
+---
+- name: Populate service facts
+  ansible.builtin.service_facts:
+
+- name: Increase number of open files
+  ansible.builtin.sysctl:
+    name: fs.file-max
+    value: "1048576"
+    sysctl_set: true
+    state: present
+    reload: true
+
+- name: Stop service firewalld, if started
+  ansible.builtin.service:
+    name: firewalld
+    state: stopped
+    enabled: false
+  when: ansible_facts.services is defined and 'firewalld.service' in ansible_facts.services
+
+- name: Check if k3s is already installed
+  ansible.builtin.shell:
+    cmd: k3s --version
+  register: k3s
+  failed_when: false
+  changed_when: k3s.rc == 127
+
+- name: Set version in variable
+  ansible.builtin.set_fact:
+    k3s_installed_version: '{{ k3s.stdout_lines[0].split(" ")[2] }}'
+  when: not k3s.changed
+
+  # set proxy if http_proxy_var is defined
+  # set k3s_version if provided, if not use installed version
+- name: Set variable facts
+  ansible.builtin.set_fact:
+    proxy: "{{ http_proxy_var | default() }}"
+    k3s_version: '{{ k3s_version | default("{{ k3s_installed_version | default() }}") }}'
+
+- name: Install prerequisits to k3s
+  ansible.builtin.package:
+    name:
+      - curl
+  environment:
+    HTTP_PROXY: "{{ proxy }}"
+    HTTPS_PROXY: "{{ proxy }}"
+    NO_PROXY: "{{ hostvars[groups[\"c3_manager\"][0]].ansible_facts.default_ipv4.address }},localhost,127.0.0.1"
+
+- name: Create k3s directory
+  ansible.builtin.file:
+    path: /var/lib/rancher/k3s/server/manifests
+    state: directory
+    mode: '0755'
+
+- name: Disable k3s components using .skip files
+  ansible.builtin.file:
+    path: "/var/lib/rancher/k3s/server/manifests/{{ item }}.yaml.skip"
+    state: touch
+    mode: '0644'
+    modification_time: preserve
+    access_time: preserve
+  loop: "{{ k3s_disabled_components }}"
+  when: k3s_disabled_components is defined
+
+- name: Upload custom storage manifest
+  ansible.builtin.copy:
+    src: "custom-local-storage.yml"
+    dest: "/var/lib/rancher/k3s/server/manifests/"
+    owner: root
+    group: root
+    mode: 0644
+  when: 'k3s_disabled_components is defined and "local-storage" in k3s_disabled_components'
+
+- name: Create k3s config directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s/
+    state: directory
+    mode: '0755'
+
+- name: Copy k3s config
+  ansible.builtin.template:
+    src: "config.yaml"
+    dest: "/etc/rancher/k3s/config.yaml"
+    owner: root
+    group: root
+    mode: 0640
+  when: inventory_hostname in groups['c3_manager']
+
+- name: Copy k3s registries config
+  ansible.builtin.template:
+    src: "registries.yaml"
+    dest: "/etc/rancher/k3s/registries.yaml"
+    owner: root
+    group: root
+    mode: 0640
+
+- name: Set facts for managers
+  ansible.builtin.set_fact:
+    cmd: "curl -sfL https://get.k3s.io | sh -s - server --disable servicelb --kubelet-arg max-pods=500 --disable-cloud-controller --kubelet-arg cloud-provider=external"
+    url: "{{ 'https://{{ hostvars[groups[\"c3_manager\"][0]].ansible_facts.default_ipv4.address }}:6443' }}"
+    k3s_env: "/etc/systemd/system/k3s.service.env"
+  when: inventory_hostname in groups['c3_manager']
+
+- name: Set facts for first manager
+  ansible.builtin.set_fact:
+    cmd: "{{ 'curl -sfL https://get.k3s.io | sh -'
+          if (groups['c3_manager'] | length) == 1
+          else
+          'curl -sfL https://get.k3s.io | sh -s - server --cluster-init --disable servicelb --kubelet-arg max-pods=500 --disable-cloud-controller --kubelet-arg cloud-provider=external' }}"
+    url: ""
+  when: inventory_hostname == groups['c3_manager'][0]
+
+- name: Set facts for workers
+  ansible.builtin.set_fact:
+    cmd: "curl -sfL https://get.k3s.io | sh -"
+    url: "{{ 'https://{{ hostvars[groups[\"c3_manager\"][0]].ansible_facts.default_ipv4.address }}:6443' }}"
+    k3s_env: "/etc/systemd/system/k3s-agent.service.env"
+  when: inventory_hostname in groups['c3_worker']
+
+  # Install k3s if k3s is not installed
+  # upgrade/downgrade k3s if version is different
+- name: Install/Upgrade/Downgrade k3s
+  ansible.builtin.shell:
+    cmd: "{{ cmd }}"
+  environment:
+    K3S_TOKEN: "{{ vault_k3s_token }}"
+    K3S_URL: "{{ url }}"
+    INSTALL_K3S_VERSION: "{{ k3s_version | default() }}"
+    HTTP_PROXY: "{{ proxy }}"
+    HTTPS_PROXY: "{{ proxy }}"
+    NO_PROXY: "{{ hostvars[groups[\"c3_manager\"][0]].ansible_facts.default_ipv4.address }},localhost,127.0.0.1"
+  when: k3s.rc == 127 or k3s_installed_version != k3s_version
+  throttle: 1  # join one server at a time, otherwise errors happen
+
+- name: Remove Proxy from k3s environment file
+  ansible.builtin.lineinfile:
+    dest: "{{ k3s_env }}"
+    regex: "{{ item }}"
+    state: absent
+  with_items:
+    - '^HTTP_PROXY'
+    - '^HTTPS_PROXY'
+    - '^NO_PROXY'
+
+- name: Taint manager nodes - NoSchedule
+  ansible.builtin.shell:
+    cmd: /usr/local/bin/kubectl taint node "{{ inventory_hostname }}" node-role.kubernetes.io/control-plane=:NoSchedule
+  when: inventory_hostname in groups['c3_manager']
+  register: taint
+  failed_when: false
+  changed_when: taint.rc == 0
+

@@ -1,0 +1,3 @@
+cluster-cidr: "{{ k3s_cluster_cidr | default('100.64.0.0/16') }}" # Network CIDR to use for pod IPs
+service-cidr: "{{ k3s_service_cidr | default('100.65.0.0/16') }}" # Network CIDR to use for services IPs
+cluster-dns: "{{ k3s_cluster_dns | default('100.65.0.10') }}" # Cluster IP for coredns service. Should be in your service-cidr range

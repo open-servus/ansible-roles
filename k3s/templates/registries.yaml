@@ -1,0 +1,8 @@
+{% if mirrors is defined %}
+mirrors:
+{% for mirror in mirrors %}
+  {{ mirror.name }}:
+    endpoint:
+      - "{{ mirror.endpoint }}"
+{% endfor %}
+{% endif%}
